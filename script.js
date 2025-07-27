@@ -784,6 +784,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pausar todos los videos primero
             pauseAllVideos();
             
+            // Precargar el video actual para mejor rendimiento
+            if (currentVideo.readyState < 2) { // HAVE_CURRENT_DATA
+                currentVideo.load();
+            }
+            
             // Reproducir el video actual después de un pequeño delay
             setTimeout(() => {
                 if (currentSlide === currentSlide) { // Verificar que no haya cambiado
@@ -809,21 +814,52 @@ document.addEventListener('DOMContentLoaded', () => {
     
     sliderObserver.observe(sliderTrack);
     
+    // Función para precargar videos de manera inteligente
+    function preloadVideos() {
+        const videos = document.querySelectorAll('video');
+        videos.forEach((video, index) => {
+            // Precargar solo los primeros 2 videos para mejorar rendimiento
+            if (index < 2) {
+                video.preload = 'metadata';
+            } else {
+                video.preload = 'none';
+            }
+            
+            // Agregar atributos para mejor rendimiento
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+        });
+    }
+    
     // Inicializar slider
     createDots();
     updateButtons();
+    preloadVideos();
     
-    // Efecto de carga para imágenes
+    // Efecto de carga mejorado para imágenes
     const images = document.querySelectorAll('.image-container img');
     images.forEach(img => {
-        img.addEventListener('load', () => {
-            img.style.opacity = '1';
-        });
+        const container = img.closest('.image-container');
         
-        img.addEventListener('error', () => {
+        // Preload de imágenes para mejorar rendimiento
+        const preloadImage = new Image();
+        preloadImage.onload = () => {
+            img.classList.add('loaded');
+            container.classList.add('loaded');
+            img.style.opacity = '1';
+        };
+        
+        preloadImage.onerror = () => {
             img.style.opacity = '0.5';
             img.style.filter = 'grayscale(100%)';
-        });
+            container.classList.add('loaded');
+            const loadingElement = container.querySelector('.image-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Error al cargar imagen</span>';
+            }
+        };
+        
+        preloadImage.src = img.src;
     });
     
     // Efecto de hover para slides
@@ -1018,4 +1054,67 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Inicializar partículas del equipo
     createTeamParticles();
+    
+    // Función para mostrar progreso de carga
+    function showLoadingProgress() {
+        const totalAssets = document.querySelectorAll('img, video').length;
+        let loadedAssets = 0;
+        
+        const progressBar = document.createElement('div');
+        progressBar.className = 'loading-progress';
+        progressBar.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #f0f0f0;
+            z-index: 10000;
+        `;
+        
+        const progressFill = document.createElement('div');
+        progressFill.style.cssText = `
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        `;
+        
+        progressBar.appendChild(progressFill);
+        document.body.appendChild(progressBar);
+        
+        function updateProgress() {
+            loadedAssets++;
+            const progress = (loadedAssets / totalAssets) * 100;
+            progressFill.style.width = progress + '%';
+            
+            if (loadedAssets >= totalAssets) {
+                setTimeout(() => {
+                    progressBar.style.opacity = '0';
+                    setTimeout(() => {
+                        document.body.removeChild(progressBar);
+                    }, 300);
+                }, 500);
+            }
+        }
+        
+        // Monitorear carga de imágenes
+        document.querySelectorAll('img').forEach(img => {
+            if (img.complete) {
+                updateProgress();
+            } else {
+                img.addEventListener('load', updateProgress);
+                img.addEventListener('error', updateProgress);
+            }
+        });
+        
+        // Monitorear carga de videos
+        document.querySelectorAll('video').forEach(video => {
+            video.addEventListener('loadedmetadata', updateProgress);
+            video.addEventListener('error', updateProgress);
+        });
+    }
+    
+    // Mostrar progreso de carga
+    showLoadingProgress();
 }); 
